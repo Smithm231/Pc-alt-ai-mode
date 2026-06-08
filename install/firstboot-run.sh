@@ -37,15 +37,24 @@ bash /opt/inference-boot/install/07-sandbox.sh
 echo "[6/6] Network / firewall..."
 bash /opt/inference-boot/install/04-network.sh
 
-# Re-verify GPU now we're running natively (02 may have only warned in chroot)
+# Re-verify GPU now running natively on real hardware (02 could only warn inside chroot).
+# Hard-fail here if the GPU is absent — prevent silent CPU fallback.
 if grep -q "PENDING_GPU_VERIFY=true" /opt/inference-boot/.firstboot-state 2>/dev/null; then
   echo "[GPU verify] Confirming gfx1100 on live hardware..."
   if rocminfo 2>/dev/null | grep -qi "gfx1100"; then
-    echo "[GPU verify] gfx1100 confirmed."
+    echo "[GPU verify] gfx1100 confirmed by rocminfo."
   else
-    echo "[GPU verify] WARNING: gfx1100 not detected by rocminfo on live hardware."
-    echo "[GPU verify] Check: rocminfo | grep -i gfx"
-    echo "[GPU verify] If HSA_OVERRIDE_GFX_VERSION is needed, verify value in install.conf."
+    echo ""
+    echo "FATAL: gfx1100 (RX 7900 XTX) not detected by rocminfo on live hardware."
+    echo "       This would cause llama-server to fall back to CPU-only inference."
+    echo "       Aborting first-boot to prevent silent degradation."
+    echo ""
+    echo "  Diagnose: rocminfo | grep -i gfx"
+    echo "  Check:    HSA_OVERRIDE_GFX_VERSION in /etc/inference-boot/llama-server-env"
+    echo "  Check:    ROCm installation:  dpkg -l 'rocm*' | head -20"
+    echo "  Check:    GPU in system:      lspci | grep -i vga"
+    echo ""
+    exit 1
   fi
   sed -i '/PENDING_GPU_VERIFY/d' /opt/inference-boot/.firstboot-state
 fi

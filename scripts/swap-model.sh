@@ -21,5 +21,5 @@ ln -sf "$SRC" "$ACTIVE_MODEL_LINK"
 echo "Active model link: $ACTIVE_MODEL_LINK → $SRC"
 
 echo "Restarting llama-server..."
-systemctl restart llama-server
+sudo systemctl restart llama-server.service
 echo "Done.  Verify: ./scripts/health-check.sh"

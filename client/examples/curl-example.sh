@@ -6,7 +6,7 @@
 # ============================================================
 
 HOST="${1:-inference-pc.local}"
-PORT=8080   # nginx proxy port (change to 11434 to hit llama-server directly)
+PORT=8080   # nginx proxy port (change to 8081 to hit llama-server directly)
 
 # Get model ID from /v1/models if not specified
 if [[ -z "${2-}" ]]; then

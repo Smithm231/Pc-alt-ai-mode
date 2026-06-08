@@ -5,7 +5,7 @@
 # ============================================================
 
 HOST="${1:-inference-pc.local}"
-PORT="${2:-11434}"
+PORT="${2:-8081}"
 URL="http://${HOST}:${PORT}/v1/models"
 
 echo "Querying $URL ..."

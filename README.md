@@ -11,7 +11,7 @@ primary drive is untouched.
  │                  Gaming PC                       │
  │  NVMe  (500GB): Inference Boot OS                │
  │   └─ llama-server (llama.cpp, ROCm, gfx1100)     │
- │   └─ OpenAI-compatible API (:11434, :8080/v1)    │
+ │   └─ OpenAI-compatible API (:8081, :8080/v1)     │
  │  SATA SSD (500GB): model library, sandbox, backups│
  └─────────────────────┬────────────────────────────┘
                        │ LAN

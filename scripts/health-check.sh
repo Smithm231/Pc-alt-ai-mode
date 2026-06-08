@@ -5,7 +5,7 @@
 # ============================================================
 
 HOST="${1:-inference-pc.local}"
-LLAMACPP_PORT="${LLAMACPP_PORT:-11434}"
+LLAMACPP_PORT="${LLAMACPP_PORT:-8081}"
 PROXY_PORT="${PROXY_PORT:-8080}"
 SSH_PORT="${SSH_PORT:-22}"
 

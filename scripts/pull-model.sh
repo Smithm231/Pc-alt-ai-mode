@@ -62,10 +62,10 @@ if [[ "$ACTIVATE" == "true" ]]; then
 
   if systemctl is-active --quiet llama-server 2>/dev/null; then
     info "Restarting llama-server..."
-    systemctl restart llama-server
+    sudo systemctl restart llama-server.service
     info "Done."
   else
-    warn "llama-server not running — start with: systemctl start llama-server"
+    warn "llama-server not running — start with: sudo systemctl start llama-server.service"
   fi
 fi
 
