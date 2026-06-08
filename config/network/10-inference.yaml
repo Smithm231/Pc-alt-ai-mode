@@ -1,0 +1,27 @@
+# Netplan config for the inference OS.
+# Enables DHCP on all ethernet interfaces.
+# Edit to set a static IP if preferred.
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    # Wildcard — matches any ethernet NIC (enp*, eth*, eno*)
+    all-en:
+      match:
+        name: "en*"
+      dhcp4: true
+      dhcp6: false
+      # Uncomment for static IP:
+      # dhcp4: false
+      # addresses: [192.168.1.200/24]
+      # gateway4: 192.168.1.1
+      # nameservers:
+      #   addresses: [1.1.1.1, 8.8.8.8]
+      optional: true
+    all-eth:
+      match:
+        name: "eth*"
+      dhcp4: true
+      dhcp6: false
+      optional: true

@@ -1,0 +1,26 @@
+# Inference Boot — SSH hardening config
+# Placed at /etc/ssh/sshd_config.d/inference.conf
+
+Port __SSH_PORT__
+
+# Only allow the inference user
+AllowUsers inference
+
+# Key auth preferred; password auth only if no key configured
+PubkeyAuthentication yes
+PasswordAuthentication yes
+PermitEmptyPasswords no
+
+# Disable root login
+PermitRootLogin no
+
+# Reduce attack surface
+X11Forwarding no
+AllowTcpForwarding yes
+GatewayPorts no
+MaxAuthTries 4
+LoginGraceTime 30
+
+# Keep connections alive over LAN
+ClientAliveInterval 60
+ClientAliveCountMax 3

@@ -1,0 +1,15 @@
+[Unit]
+Description=Inference Boot — First-boot setup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/opt/inference-boot/.firstboot-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/inference-boot/install/firstboot-run.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
