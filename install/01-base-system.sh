@@ -85,19 +85,23 @@ systemctl enable ssh
 info "Writing scoped sudoers allowlist..."
 cat > /etc/sudoers.d/inference <<SUDOERS
 # inference user — narrow allowlist; NOT NOPASSWD:ALL
-# This is a security boundary. Every line here is a privilege grant; review before adding.
+# This is a security boundary. Every line here is a privilege grant; audit before adding.
+# Any command NOT listed here is DENIED.
+# Never add: bash sh python3 vim less more awk env find systemctl-edit iptables nft ufw mount su
+# For the class of risk, see: https://gtfobins.github.io
 
-# llama-server lifecycle — restart on model swap, start/stop by authorised scripts
+# llama-server lifecycle — for pull-model.sh and manual service management.
+# Note: swap-model.sh handles systemctl internally (it already runs as root).
 ${INFERENCE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start llama-server.service
 ${INFERENCE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl stop llama-server.service
 ${INFERENCE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl restart llama-server.service
 ${INFERENCE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl status llama-server.service
 
-# Sandbox: propose code for mediated execution via drop-box (mediator runs as root,
-# validates, copies to SANDBOX_DIR as sandboxrun, executes with confinement)
+# Sandbox: propose code for mediated execution (drop-box pattern).
+# mediator validates, takes custody, moves into SANDBOX_DIR as sandboxrun, confines with systemd.
 ${INFERENCE_USER} ALL=(root) NOPASSWD: /opt/inference-boot/scripts/sandbox-mediator.sh
 
-# Model swap — relinks active model and restarts llama-server
+# Model swap — input-validated (basename, .gguf, realpath containment, symlink rejection).
 ${INFERENCE_USER} ALL=(root) NOPASSWD: /opt/inference-boot/scripts/swap-model.sh
 SUDOERS
 chmod 440 /etc/sudoers.d/inference
