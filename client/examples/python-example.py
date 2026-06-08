@@ -14,7 +14,7 @@ MODEL = os.getenv("INFERENCE_MODEL", "llama3.2")
 
 client = OpenAI(
     base_url=f"http://{HOST}:{PORT}/v1",
-    api_key="not-needed",  # Ollama doesn't require a key
+    api_key="not-needed",  # llama-server doesn't require a key
 )
 
 def chat(prompt: str, model: str = MODEL) -> str:

@@ -1,0 +1,37 @@
+[Unit]
+Description=llama.cpp inference server (Herald node)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=inference
+Group=inference
+
+# Runtime env: llama-server config + ROCm env vars (incl. HSA_OVERRIDE_GFX_VERSION)
+EnvironmentFile=/etc/inference-boot/llama-server-env
+
+ExecStart=/usr/local/bin/llama-server \
+  --host ${LLAMACPP_HOST} \
+  --port ${LLAMACPP_PORT} \
+  --model ${ACTIVE_MODEL_LINK} \
+  --ctx-size ${CTX_SIZE} \
+  --n-gpu-layers ${N_GPU_LAYERS} \
+  --parallel ${N_PARALLEL} \
+  --log-disable
+
+# Restart on failure but not on clean stop (e.g. model swap)
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+
+# GPU device access
+SupplementaryGroups=render video
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-server
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh UFW Discord IP allowlist
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/inference-boot/scripts/update-discord-ips.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=discord-ips-refresh

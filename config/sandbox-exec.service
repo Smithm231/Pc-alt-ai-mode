@@ -1,0 +1,55 @@
+# ============================================================
+# sandbox-exec.service — Transient template for sandboxed code execution
+#
+# This is a template unit.  Do NOT start it directly.
+# Use scripts/run-sandbox.sh which invokes systemd-run with these
+# properties, passing the script to execute as an argument.
+#
+# Confinement layers (defence-in-depth — no single layer trusted alone):
+#   - Runs as __SANDBOX_USER__ (unprivileged, no login shell)
+#   - ProtectSystem=strict:   OS dirs read-only to this service
+#   - ProtectHome=true:       home dirs hidden
+#   - PrivateTmp=true:        /tmp is a private tmpfs, not shared
+#   - NoNewPrivileges=true:   cannot gain capabilities or setuid
+#   - PrivateNetwork=true:    no network access whatsoever
+#   - ReadWritePaths:         ONLY the sandbox dir is writable
+#
+# Verify directive syntax against: man systemd.exec
+# Directive names and semantics can change between systemd major versions.
+# ============================================================
+
+[Unit]
+Description=Sandbox code execution (Herald ring-fence)
+After=media-sata\x2dssd.mount
+
+[Service]
+Type=oneshot
+User=__SANDBOX_USER__
+Group=__SANDBOX_USER__
+
+# ---- Confinement ----
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+NoNewPrivileges=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=false   # must be false: generated code is exec'd
+PrivateNetwork=true             # no network from inside the sandbox
+
+# Only the sandbox dir is writable
+ReadWritePaths=__SANDBOX_DIR__
+# Everything else the unit might need is read-only (implicit from ProtectSystem=strict)
+
+# Hard memory cap to prevent runaway generated code
+MemoryMax=4G
+CPUQuota=200%
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sandbox-exec

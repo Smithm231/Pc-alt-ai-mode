@@ -1,32 +1,72 @@
 #!/usr/bin/env bash
 # ============================================================
-# pull-model.sh — Pull a model onto the inference PC
-# Usage: ./scripts/pull-model.sh <model-tag> [host]
-# Example: ./scripts/pull-model.sh mistral
-#          ./scripts/pull-model.sh deepseek-r1:14b
+# pull-model.sh — Download a GGUF model from HuggingFace
+#
+# Usage: ./scripts/pull-model.sh <repo> <filename> [--activate]
+# Example:
+#   ./scripts/pull-model.sh \
+#     bartowski/Llama-3.2-3B-Instruct-GGUF \
+#     Llama-3.2-3B-Instruct-Q8_0.gguf \
+#     --activate
+#
+# Models are downloaded into MODELS_DIR on the SATA SSD.
+# Pass --activate to point the ACTIVE_MODEL_LINK symlink at the new model
+# and restart llama-server.
 # ============================================================
+set -euo pipefail
 
-MODEL="${1:?Usage: $0 <model-tag> [host]}"
-HOST="${2:-inference-pc.local}"
-PORT="${OLLAMA_PORT:-11434}"
+CONF="/opt/inference-boot/install/install.conf"
+[[ -f "$CONF" ]] && source "$CONF"
 
-echo "Pulling '$MODEL' on $HOST ..."
+# Defaults if running remotely without the conf
+MODELS_DIR="${MODELS_DIR:-/media/sata-ssd/models}"
+ACTIVE_MODEL_LINK="${ACTIVE_MODEL_LINK:-/opt/inference-boot/models/active.gguf}"
 
-curl -s "http://$HOST:$PORT/api/pull" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"$MODEL\"}" | \
-while IFS= read -r line; do
-  STATUS=$(echo "$line" | jq -r '.status // empty' 2>/dev/null)
-  COMPLETED=$(echo "$line" | jq -r '.completed // empty' 2>/dev/null)
-  TOTAL=$(echo "$line" | jq -r '.total // empty' 2>/dev/null)
+REPO="${1:?Usage: $0 <hf-repo> <filename.gguf> [--activate]}"
+FILE="${2:?Usage: $0 <hf-repo> <filename.gguf> [--activate]}"
+ACTIVATE=false
+[[ "${3-}" == "--activate" ]] && ACTIVATE=true
 
-  if [[ -n "$TOTAL" && -n "$COMPLETED" && "$TOTAL" -gt 0 ]]; then
-    PCT=$(( COMPLETED * 100 / TOTAL ))
-    printf "\r  %s: %d%%   " "$STATUS" "$PCT"
-  elif [[ -n "$STATUS" ]]; then
-    echo "  $STATUS"
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+info() { echo -e "${GREEN}[PULL]${NC} $*"; }
+warn() { echo -e "${YELLOW}[PULL]${NC} $*"; }
+
+DEST="${MODELS_DIR}/${FILE}"
+
+if [[ -f "$DEST" ]]; then
+  info "Already downloaded: $DEST"
+else
+  info "Downloading: $REPO / $FILE → $MODELS_DIR"
+  mkdir -p "$MODELS_DIR"
+
+  if ! command -v huggingface-cli >/dev/null 2>&1; then
+    warn "huggingface-cli not found — installing..."
+    pip3 install --break-system-packages huggingface_hub 2>/dev/null || \
+      pip3 install huggingface_hub
   fi
-done
 
-echo ""
-echo "Done. Verify with: ./client/list-models.sh $HOST"
+  huggingface-cli download \
+    "$REPO" \
+    "$FILE" \
+    --local-dir "$MODELS_DIR" \
+    --local-dir-use-symlinks False
+
+  info "Downloaded: $DEST"
+fi
+
+if [[ "$ACTIVATE" == "true" ]]; then
+  info "Activating: $DEST"
+  mkdir -p "$(dirname "$ACTIVE_MODEL_LINK")"
+  ln -sf "$DEST" "$ACTIVE_MODEL_LINK"
+  info "Active model link → $DEST"
+
+  if systemctl is-active --quiet llama-server 2>/dev/null; then
+    info "Restarting llama-server..."
+    systemctl restart llama-server
+    info "Done."
+  else
+    warn "llama-server not running — start with: systemctl start llama-server"
+  fi
+fi
+
+info "Verify: ./scripts/health-check.sh"
