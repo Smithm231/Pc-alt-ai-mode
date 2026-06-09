@@ -79,7 +79,7 @@ else
   warn "Could not retrieve GPU info via SSH"
 fi
 
-# ---- llama-server GPU utilisation (via SSH) ----
+# ---- llama-server service status (via SSH) ----
 echo ""
 echo "llama-server service status:"
 if SVC=$(ssh -o ConnectTimeout=4 -o StrictHostKeyChecking=no \
@@ -90,6 +90,40 @@ if SVC=$(ssh -o ConnectTimeout=4 -o StrictHostKeyChecking=no \
   echo "$SVC" | while IFS= read -r line; do echo "      $line"; done
 else
   warn "Could not query llama-server service via SSH"
+fi
+
+# ---- ESTABLISHED/RELATED round-trip test (Issue 3, Addendum 3) ----
+# Port-connect alone does not prove API responses flow back under default-deny-out.
+# This test sends a real request and checks a real response body arrives.
+echo ""
+echo "Firewall round-trip (ESTABLISHED outbound test):"
+if ROUNDTRIP=$(curl -sf --max-time 8 "http://$HOST:$LLAMACPP_PORT/v1/models" 2>/dev/null); then
+  if echo "$ROUNDTRIP" | jq -e '.object == "list"' >/dev/null 2>&1; then
+    ok "Response body received — ESTABLISHED,RELATED outbound is working"
+  else
+    warn "Got a response but body was unexpected: ${ROUNDTRIP:0:80}"
+  fi
+else
+  fail "No response received — port may connect but responses may be dropped"
+  echo "      If llama-server is up but this fails, the UFW ESTABLISHED,RELATED"
+  echo "      outbound rule may be missing from /etc/ufw/before.rules."
+  echo "      Fix: ssh inference@$HOST, then:"
+  echo "        sudo grep ESTABLISHED /etc/ufw/before.rules"
+  echo "        If absent: sudo sed -i '/ufw-before-output -o lo/a"
+  echo "          -A ufw-before-output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT'"
+  echo "          /etc/ufw/before.rules && sudo ufw reload"
+fi
+
+# ---- Firewall egress summary (via SSH) ----
+echo ""
+echo "Firewall egress summary:"
+if FW=$(ssh -o ConnectTimeout=4 -o StrictHostKeyChecking=no \
+  -p "$SSH_PORT" "inference@$HOST" \
+  "ufw status | grep -E 'Status|ALLOW OUT|cloudflare|DNS|NTP' 2>/dev/null" 2>/dev/null); then
+  ok "UFW egress rules (key lines):"
+  echo "$FW" | while IFS= read -r line; do echo "      $line"; done
+else
+  warn "Could not retrieve UFW status via SSH"
 fi
 
 echo ""

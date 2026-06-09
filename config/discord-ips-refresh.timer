@@ -1,9 +1,12 @@
 [Unit]
-Description=Daily refresh of Discord IP UFW rules
+Description=Weekly refresh of Cloudflare CIDR UFW rules (Discord egress)
 After=network-online.target
 
 [Timer]
-OnCalendar=daily
+# Cloudflare's published CIDR ranges change rarely — weekly is sufficient.
+# (Old approach used daily because it was resolving rotating per-host IPs;
+#  that fragility is gone now that we track stable published CIDR blocks.)
+OnCalendar=weekly
 RandomizedDelaySec=3600
 Persistent=true
 
