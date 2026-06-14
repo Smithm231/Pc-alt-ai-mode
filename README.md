@@ -235,18 +235,63 @@ The active model is a symlink on the NVMe (`/opt/inference-boot/models/active.gg
 
 ---
 
-## Switching between gaming and inference mode
+## Boot behaviour (dual boot)
 
-| Method | How |
-|---|---|
-| One-time boot | F8/F11/F12/Del at POST → select the OS |
-| BIOS boot order | Change default drive in BIOS settings |
-| Wake-on-LAN | Power on remotely from gaming OS |
+Both OSes live on separate drives in the one PC. The installer makes the
+**inference OS the default boot target** and adds the gaming OS (Windows) to the
+GRUB menu:
+
+- **Power on / Wake-on-LAN →** GRUB shows a menu for `GRUB_TIMEOUT_SECONDS`
+  (default 10s), then boots **InferenceBoot** automatically. This is what makes
+  remote wake land in inference mode with nothing running in Windows.
+- **To game →** sit down, power on, and pick **Windows** in the GRUB menu (or
+  use your BIOS one-time boot key). It's one keypress.
+
+Don't want inference as the default? Set the gaming drive first in your BIOS
+boot order instead — but then remote wake-into-inference won't work.
+
+---
+
+## Remote wake from the Digital Brain
+
+Goal: starting the Digital Brain on the work PC powers the gaming PC on **into
+inference mode** and waits until the Herald API is live.
 
 ```bash
-# Send WoL magic packet (MAC saved at /opt/inference-boot/.mac-address)
-./scripts/wol-wake.sh aa:bb:cc:dd:ee:ff
+# Run this from the work PC as part of the Digital Brain startup.
+# MAC is printed at first boot and saved at /opt/inference-boot/.mac-address
+./client/wake-herald.sh aa:bb:cc:dd:ee:ff
+# or via env, for wiring into a startup script:
+HERALD_MAC=aa:bb:cc:dd:ee:ff ./client/wake-herald.sh
 ```
+
+`wake-herald.sh` sends the WoL magic packet, then polls
+`http://inference-pc.local:8080/v1/models` until it answers (or times out with
+diagnostics). For a bare packet with no wait, use `./scripts/wol-wake.sh <mac>`.
+
+### Prerequisites for waking from *fully off* (one-time setup)
+
+Wake-on-LAN can power the box on, but the firmware and the **last OS that ran**
+must leave the NIC armed. Because you normally power off from Windows after
+gaming, do all of these once:
+
+**In the BIOS/UEFI:**
+- Enable **"Power On By PCIE/PCI"** (a.k.a. *Wake on LAN* / *Resume by PCI-E*).
+- Disable **"ErP Ready"** / deep-sleep (it cuts standby power to the NIC).
+
+**In Windows (so a wake works after a gaming session):**
+- Disable **Fast Startup** (Control Panel → Power Options → *Choose what the
+  power buttons do* → uncheck *Turn on fast startup*). Fast Startup makes
+  "shut down" a hybrid state that usually breaks WoL.
+- Device Manager → your network adapter → **Power Management**: check *Allow
+  this device to wake the computer* and *Only allow a magic packet…*.
+- Device Manager → adapter → **Advanced**: set *Wake on Magic Packet* = Enabled.
+
+The inference OS already arms WoL on every boot (`wol.service`, via `ethtool`),
+so waking after an inference session works out of the box.
+
+> Note: WoL is layer-2 — the work PC and gaming PC must share the same LAN
+> subnet. Across subnets/VLANs you'd need a directed broadcast or a forwarder.
 
 ---
 
@@ -306,7 +351,8 @@ control.  They are not and cannot be described as total isolation.
 │   ├── 05-storage.sh          ← SATA SSD mount + workspace dirs (auto, first boot)
 │   ├── 06-scratch-vault.sh    ← Disposable scratch vault (auto, first boot)
 │   ├── 07-sandbox.sh          ← Ring-fenced exec sandbox (auto, first boot)
-│   └── firstboot-run.sh       ← Orchestrates 02–07
+│   ├── firstboot-run.sh       ← Orchestrates 02–07
+│   └── build-installer.sh     ← Pack the whole repo into one self-extracting file
 ├── config/
 │   ├── llama-server.service        ← systemd unit for llama-server
 │   ├── sandbox-exec.service        ← systemd sandbox template
@@ -321,6 +367,7 @@ control.  They are not and cannot be described as total isolation.
 ├── client/
 │   ├── connect.sh
 │   ├── list-models.sh
+│   ├── wake-herald.sh         ← Wake gaming PC into inference + wait for API
 │   └── examples/
 │       ├── curl-example.sh
 │       └── python-example.py

@@ -118,19 +118,70 @@ cp "$CONF" "$MNTPOINT/opt/inference-boot/install/install.conf"
 info "Entering chroot for stage 2 setup..."
 arch-chroot "$MNTPOINT" /opt/inference-boot/install/01-base-system.sh
 
-# ---- Bootloader ----
+# ---- Bootloader (dual-boot: inference default, gaming OS selectable) ----
 info "Installing GRUB EFI bootloader..."
+# os-prober + ntfs-3g let GRUB detect the Windows/gaming OS on the other drive;
+# efibootmgr lets us put InferenceBoot first in the firmware boot order.
 arch-chroot "$MNTPOINT" bash -c "
-  apt-get install -y -qq grub-efi-amd64 grub-efi-amd64-signed shim-signed
+  apt-get install -y -qq grub-efi-amd64 grub-efi-amd64-signed shim-signed \
+                         efibootmgr os-prober ntfs-3g
   grub-install --target=x86_64-efi --efi-directory=/boot/efi \
     --bootloader-id='InferenceBoot' --recheck
-  update-grub
 "
 
-# ---- GRUB entry label ----
-sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Inference Boot"/' \
-  "$MNTPOINT/etc/default/grub"
+# ---- GRUB defaults: inference first, menu shown, detect the gaming OS ----
+info "Configuring GRUB for inference-default dual boot..."
+GRUBCFG="$MNTPOINT/etc/default/grub"
+set_grub() {  # key value — set, uncomment, or append a GRUB default
+  if grep -q "^$1=" "$GRUBCFG"; then
+    sed -i "s|^$1=.*|$1=$2|" "$GRUBCFG"
+  elif grep -q "^#\s*$1=" "$GRUBCFG"; then
+    sed -i "s|^#\s*$1=.*|$1=$2|" "$GRUBCFG"
+  else
+    echo "$1=$2" >> "$GRUBCFG"
+  fi
+}
+set_grub GRUB_DISTRIBUTOR '"Inference Boot"'
+set_grub GRUB_DEFAULT 0
+set_grub GRUB_TIMEOUT "${GRUB_TIMEOUT_SECONDS:-10}"
+set_grub GRUB_TIMEOUT_STYLE menu
+if [[ "${DETECT_GAMING_OS:-true}" == "true" ]]; then
+  set_grub GRUB_DISABLE_OS_PROBER false
+fi
+
+# Regenerate the menu — os-prober runs here and should find Windows on the
+# other drive (its EFI partition is visible to the chroot).
 arch-chroot "$MNTPOINT" update-grub
+
+# ---- Verify the gaming OS made it into the menu ----
+if [[ "${DETECT_GAMING_OS:-true}" == "true" ]]; then
+  if grep -qiE "menuentry .*(windows|microsoft)" "$MNTPOINT/boot/grub/grub.cfg"; then
+    info "Gaming OS (Windows) detected and added to the GRUB menu."
+  else
+    warn "os-prober did NOT find a Windows/gaming OS on the other drive."
+    warn "You can still boot it with your BIOS one-time boot key, or run"
+    warn "'sudo update-grub' from the inference OS once both drives are present."
+  fi
+fi
+
+# ---- Make InferenceBoot the first firmware boot entry ----
+# A cold power-on / Wake-on-LAN then lands in inference automatically; the GRUB
+# menu still appears for GRUB_TIMEOUT_SECONDS so the gaming OS is one keypress away.
+info "Setting InferenceBoot first in the UEFI boot order..."
+IB_NUM=$(arch-chroot "$MNTPOINT" efibootmgr 2>/dev/null \
+  | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\? .*InferenceBoot.*/\1/p' | head -1)
+if [[ -n "${IB_NUM:-}" ]]; then
+  CUR_ORDER=$(arch-chroot "$MNTPOINT" efibootmgr 2>/dev/null \
+    | sed -n 's/^BootOrder: //p' | head -1)
+  NEWORDER="$IB_NUM"
+  IFS=',' read -ra ENTRIES <<< "${CUR_ORDER:-}"
+  for e in "${ENTRIES[@]}"; do [[ -n "$e" && "$e" != "$IB_NUM" ]] && NEWORDER+=",$e"; done
+  arch-chroot "$MNTPOINT" efibootmgr -o "$NEWORDER" >/dev/null 2>&1 \
+    && info "UEFI BootOrder set to: $NEWORDER (InferenceBoot=$IB_NUM first)" \
+    || warn "Could not set UEFI boot order — set InferenceBoot first in BIOS."
+else
+  warn "Could not read the InferenceBoot UEFI entry — set boot order in BIOS manually."
+fi
 
 # ---- Unmount ----
 info "Unmounting..."

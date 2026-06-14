@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================
-# wol-wake.sh — Send Wake-on-LAN magic packet to the inference PC
-# Run this from your gaming OS to power on the inference PC.
+# wol-wake.sh — Send Wake-on-LAN magic packet to the gaming PC.
+# Run this from the WORK PC (e.g. from the Digital Brain startup) to power the
+# gaming PC on into inference mode.  For a one-shot "wake and wait until the API
+# is up" use client/wake-herald.sh, which calls this script.
 # Usage: ./scripts/wol-wake.sh <mac-address> [broadcast-ip]
 # Example: ./scripts/wol-wake.sh aa:bb:cc:dd:ee:ff
 #          ./scripts/wol-wake.sh aa:bb:cc:dd:ee:ff 192.168.1.255

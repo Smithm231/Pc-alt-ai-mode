@@ -33,14 +33,36 @@ fi
 info "SATA SSD: $SATA_SSD_DEVICE → $SATA_SSD_MOUNT"
 lsblk "$SATA_SSD_DEVICE"
 
-# ---- Format if no filesystem present ----
-EXISTING_FS=$(blkid -s TYPE -o value "$SATA_SSD_DEVICE" 2>/dev/null || echo "")
-if [[ -z "$EXISTING_FS" ]]; then
+# ---- Format the SATA SSD as the ext4 workspace ----
+# Detect any existing filesystem on the disk OR its partitions (a Windows drive
+# carries NTFS on a partition, so blkid on the bare disk alone misses it).
+EXISTING_FS=$(lsblk -rno FSTYPE "$SATA_SSD_DEVICE" 2>/dev/null | grep -v '^$' | paste -sd, - || true)
+
+wipe_and_format_sata() {
+  info "Wiping $SATA_SSD_DEVICE (whole disk)..."
+  # Unmount / disarm anything currently using this disk or its partitions.
+  for dev in $(lsblk -lnpo NAME "$SATA_SSD_DEVICE" 2>/dev/null); do
+    umount "$dev" 2>/dev/null || true
+    swapoff "$dev" 2>/dev/null || true
+  done
+  # Clear partition-table + filesystem signatures (partitions first, then disk).
+  for part in $(lsblk -lnpo NAME "$SATA_SSD_DEVICE" 2>/dev/null | tail -n +2); do
+    wipefs -aq "$part" 2>/dev/null || true
+  done
+  wipefs -aq "$SATA_SSD_DEVICE" 2>/dev/null || true
+  mkfs.ext4 -L sata-ssd -F "$SATA_SSD_DEVICE"
+  info "Formatted $SATA_SSD_DEVICE as ext4."
+}
+
+if [[ "${SATA_FORCE_FORMAT:-false}" == "true" ]]; then
+  [[ -n "$EXISTING_FS" ]] && warn "SATA_FORCE_FORMAT=true — existing data ($EXISTING_FS) on $SATA_SSD_DEVICE will be DESTROYED."
+  wipe_and_format_sata
+elif [[ -z "$EXISTING_FS" ]]; then
   info "No filesystem found on $SATA_SSD_DEVICE — formatting ext4..."
   mkfs.ext4 -L sata-ssd -F "$SATA_SSD_DEVICE"
   info "Formatted ext4."
 else
-  info "Existing filesystem: $EXISTING_FS — skipping format."
+  die "Existing filesystem ($EXISTING_FS) on $SATA_SSD_DEVICE — refusing to overwrite. Set SATA_FORCE_FORMAT=true in install.conf to wipe it."
 fi
 
 # ---- Mount ----
