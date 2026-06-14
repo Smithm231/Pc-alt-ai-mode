@@ -72,6 +72,40 @@ The data-flow is asymmetric:
 
 ---
 
+## Single-file install (one file on a USB)
+
+If you want the whole project as **one file** — to drop on a USB stick or hand
+to a local Claude Code session — build the self-extracting installer:
+
+```bash
+./install/build-installer.sh        # -> ./inference-boot-installer.sh
+```
+
+`inference-boot-installer.sh` embeds the entire repo (all install scripts,
+configs, and client/scripts) as a compressed payload. Copy that single file
+anywhere — no git clone or other files required.
+
+```bash
+./inference-boot-installer.sh --help               # show usage
+./inference-boot-installer.sh --verify             # check the embedded payload checksum
+./inference-boot-installer.sh --extract            # unpack to /tmp/inference-boot
+sudo ./inference-boot-installer.sh --install /dev/nvme1n1   # unpack + run bootstrap (WIPES that drive)
+```
+
+### Pointing local Claude Code at it
+
+On the Ubuntu live USB, hand the single file to a local Claude Code session and
+say **"run this installer."** The brief at the top of the file tells Claude to:
+
+1. `--extract` the project to `/tmp/inference-boot`.
+2. Help you edit `install/install.conf` (drives, password/SSH key, LAN CIDR, model).
+3. `--install /dev/nvmeXnX` to partition, debootstrap, and install GRUB.
+4. Reboot into the **InferenceBoot** entry; first boot finishes automatically.
+
+Re-run `build-installer.sh` after changing any file to keep the single file in sync.
+
+---
+
 ## Quick start
 
 ### 1. Edit configuration
